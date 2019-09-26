@@ -1,0 +1,3 @@
+# 忽略 hdf 和 tiff 文件
+*.hdf
+*.tiff
