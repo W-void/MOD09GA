@@ -16,12 +16,18 @@ from sklearn.externals import joblib
 
 #%%
 def detectCloud(b):
-    flag = (b[:, :, 3] > 1000) & (b[:, :, 0] > 1000)
+    # cloud = (b[:, :, 3] > 1200) & (b[:, :, 0] > 1400)
+    # noCloud = (~cloud) & (b[:, :, 0] < 700) & (b[:, :, 1] < 1000)
+    # masker = cloud * 1 + noCloud * 2
+    # img = np.clip(b[:, :, :3]*1e-4, a_min=0, a_max=1).astype(np.float32)
+    # mark4 = cv2.watershed(np.uint8(img*255) ,masker)    # 返回-1是边界，0是不确定，剩下的就是目标
+    # flag = mark4 != 2
+    flag = (b[:, :, 3] > 1200) & (b[:, :, 0] > 1400)
     return flag
 
 
 def findBetter(GA, tifList):
-    blue = np.zeros((2400, 2400), np.int16)
+    blue = np.zeros((2400, 2400), np.float32)
     blueList = []
     zenithList = []
     flag = []
@@ -39,18 +45,20 @@ def findBetter(GA, tifList):
         zenithList.append(zenith)
         
         validFlag = np.ones((2400, 2400), np.bool)
-        data = pd.DataFrame()
+        # data = pd.DataFrame()
         # bandOrder = [13, 14, 11, 12, 15, 16, 17]
-        data = np.zeros((2400, 2400, 7))
+        data = np.zeros((2400, 2400, 7), np.int16)
         ds = gdal.Open(tifList[i])
         for i in range(7):
             bi = ds.GetRasterBand(i+1).ReadAsArray()
             data[:, :, i] = bi
-            validFlag = validFlag & np.where(bi > -101, True, False)
+            validFlag = validFlag & np.where((bi>0)&(bi<10000), True, False)
 
-        blueList.append(np.sum(data[:, :, [4, 5]], axis=2))
+        NDVI = (data[:, :, 3] - data[:, :, 2]) / (data[:, :, 3] + data[:, :, 2])
+        NDWI = (data[:, :, 1] - data[:, :, 5]) / (data[:, :, 1] + data[:, :, 5])
+        blueList.append(np.where(NDVI > NDWI, NDVI, NDWI))
         # flag.append(clf.predict(data).reshape((2400, 2400) | ~validFlag))
-        flag.append(detectCloud(data) | ~validFlag)
+        flag.append(detectCloud(data) | ~validFlag) 
 
     # flag : 0-not cloud, 1-cloud
     switchFlag = (flag[0] == 0) & ((flag[1] == 1) | (zenith[0] < zenith[1]))
@@ -123,11 +131,14 @@ def writeImage(bands, path, geotrans=None, proj=None):
         print("save image success.")
 
 
+
+
+
 #%%
 GAPath = './MOD09GA_ST/'
-tifFileAfterList = [[224, 229], [223, 225], [224, 226], [229, 233]]
-tifFileBeforeList = [[222, 207], [219, 207], [217, 213], [218, 207]]
 regionList = ['.h27v05', '.h28v06', '.h28v05', '.h27v04']
+tifFileAfterList = [[224, 229], [223, 225], [224, 226], [229, 233]]
+tifFileBeforeList = [[212, 207], [219, 207], [217, 213], [218, 207]]
 H = W = 2400
 tifPath = './MOD09GA/'
 GQ = 'D:/Data/MOD09GQ/'
@@ -152,12 +163,12 @@ for i in range(4):
             name = 'after'
 
         # 读取所有数据，得到去云之后的图像
-        landMask = np.zeros((H, W, len(date)), np.int16)
+        landMask = np.zeros((H, W, len(date)), np.int8)
         x = y = range(H)
         xx, yy = np.meshgrid(x, y) 
         zz = np.zeros_like(xx, np.int8)
         flag = np.ones((H, W), bool)
-        blue = np.ones_like(landMask, np.int16) * -200
+        blue = np.ones_like(landMask, np.float32) * -200
 
         for i, word in enumerate(date):
             zenithList = []
@@ -176,13 +187,14 @@ for i in range(4):
             landMask[:, :, i] = tmpLandMask
             flag = flag & (tmpLandMask == 0)
         print(np.sum(flag))
+        # print(np.isinf(blue).any())
 
         # 根据蓝波段选择最优值
-        medianB = np.zeros_like(flag, np.int16)
         blue_sort = np.sort(blue, axis=-1) # 从小到大排
         blue_sort = blue_sort[:, :, ::-1] # 从大到小排
-        medianB = blue_sort[yy, xx, np.where(zz, zz-1, 0)] # 取最小值
+        # medianB = blue_sort[yy, xx, np.where(zz, zz-1, 0)] # 取最小值
         # medianB = blue_sort[yy, xx, zz//2] # 取中值中的小值
+        medianB = blue_sort[yy, xx, 0]
 
         # 得到最优值所在的时间
         NO = np.zeros((H, W), np.int8)
@@ -209,9 +221,13 @@ for i in range(4):
                     sameDateFlag = (NO == 2*i+ (0 if 'MOD'in fileName else 1))
                     bandsGA += np.int16(bandsTmp * sameDateFlag[:, :, None])
         bandsGA = np.where(flag[:, :, None], -200, bandsGA)
+
         maxVis = np.max(bandsGA[:, :, :3], axis=-1)
         maxSWIR = np.max(bandsGA[:, :, 5:], axis=-1)
         WI = maxVis > maxSWIR
+        kernel = np.ones((3, 3), np.float32)
+        WI = cv2.filter2D(WI.astype(np.uint8), -1, kernel)
+        WI = np.where(WI > 3, 200, 0)
 
         # 保存图像，并写入地理信息
         geotrans, proj = readImage('D:\\Data\\MOD09GQ\\'+date[0].split('.')[1]+'_AllWDays_percent.tiff')
