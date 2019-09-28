@@ -16,13 +16,13 @@ from sklearn.externals import joblib
 
 #%%
 def detectCloud(b):
-    # cloud = (b[:, :, 3] > 1200) & (b[:, :, 0] > 1400)
-    # noCloud = (~cloud) & (b[:, :, 0] < 700) & (b[:, :, 1] < 1000)
-    # masker = cloud * 1 + noCloud * 2
-    # img = np.clip(b[:, :, :3]*1e-4, a_min=0, a_max=1).astype(np.float32)
-    # mark4 = cv2.watershed(np.uint8(img*255) ,masker)    # 返回-1是边界，0是不确定，剩下的就是目标
-    # flag = mark4 != 2
-    flag = (b[:, :, 3] > 1200) & (b[:, :, 0] > 1400)
+    cloud = (b[:, :, 3] > 1900) & (b[:, :, 0] > 1400)
+    noCloud = (~cloud) & (b[:, :, 0] < 700) & (b[:, :, 1] < 1000)
+    masker = cloud * 1 + noCloud * 2
+    img = np.clip(b[:, :, :3]*1e-4, a_min=0, a_max=1).astype(np.float32)
+    mark4 = cv2.watershed(np.uint8(img*255) ,masker)    # 返回-1是边界，0是不确定，剩下的就是目标
+    flag = mark4 != 2
+    # flag = (b[:, :, 3] > 1200) & (b[:, :, 0] > 1400)
     return flag
 
 
@@ -55,8 +55,8 @@ def findBetter(GA, tifList):
             validFlag = validFlag & np.where((bi>0)&(bi<10000), True, False)
 
         NDVI = (data[:, :, 3] - data[:, :, 2]) / (data[:, :, 3] + data[:, :, 2])
-        NDWI = (data[:, :, 1] - data[:, :, 5]) / (data[:, :, 1] + data[:, :, 5])
-        blueList.append(np.where(NDVI > NDWI, NDVI, NDWI))
+        NDWI = (data[:, :, 1] - data[:, :, 4]) / (data[:, :, 1] + data[:, :, 4])
+        blueList.append(np.where(NDVI > NDWI, NDVI, NDWI*10))
         # flag.append(clf.predict(data).reshape((2400, 2400) | ~validFlag))
         flag.append(detectCloud(data) | ~validFlag) 
 
