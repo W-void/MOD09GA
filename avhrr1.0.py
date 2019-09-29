@@ -178,9 +178,7 @@ for i in range(364):
 #%%
 def readImage(img_path):
     dataset = gdal.Open(img_path, GA_ReadOnly)
-    band_i = dataset.GetRasterBand(1)
-    band = band_i.ReadAsArray(0, 0, band_i.XSize, band_i.YSize)
-
+    band = dataset.GetRasterBand(1).ReadAsArray()
     return band
         
 RPath = 'F:/avh_new/R/'

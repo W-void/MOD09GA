@@ -146,6 +146,7 @@ tifFileBeforeList = [[212, 207], [219, 207], [217, 213], [218, 207]]
 H = W = 2400
 tifPath = './MOD09GA/'
 GQ = 'D:/Data/MOD09GQ/'
+qc = './QC_500m/'
 allWList = os.listdir(GQ)
 allWList = [i for i in allWList if i[:2] == 'h2']
 for i in range(4):
@@ -240,3 +241,4 @@ for i in range(4):
             geotrans=geotrans, proj=proj)
         writeImage(WI, './output/'+date[0].split('.')[1]+'_'+name+'_WI.tiff', \
             geotrans=geotrans, proj=proj)
+
