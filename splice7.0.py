@@ -40,8 +40,8 @@ def findBetter(GA, tifList):
     for i in range(2):
         ds = gdal.Open(GA[i])
         zenith = ds.GetRasterBand(2).ReadAsArray()
-        zenith = np.where(zenith > 0, zenith, zenith*-1)
-        zenith = cv2.resize(zenith.astype(np.int8), None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST).astype(bool)
+        # zenith = np.where(zenith > 0, zenith, zenith*-1)
+        # zenith = cv2.resize(zenith.astype(np.int8), None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST).astype(bool)
         zenithList.append(zenith)
         
         validFlag = np.ones((2400, 2400), np.bool)
@@ -52,10 +52,12 @@ def findBetter(GA, tifList):
         for i in range(7):
             bi = ds.GetRasterBand(i+1).ReadAsArray()
             data[:, :, i] = bi
-            if i >=5:
-                continue
-            validFlag = validFlag & np.where((bi>=-100)&(bi<10000), True, False)
-
+            # if i >=5:
+            #     continue
+            # validFlag = validFlag & np.where((bi>=-100)&(bi<10000), True, False)
+        qc = ds.GetRasterBand(3).ReadAsArray()
+        validFlag = (qc & 3) == 2
+        
         NDVI = (data[:, :, 3] - data[:, :, 2]) / (data[:, :, 3] + data[:, :, 2])
         maxVis = np.max(data[:, :, :3], axis=-1)
         SWIR = np.where(data[:, :, 6] > -200, data[:, :, 6], 1]
