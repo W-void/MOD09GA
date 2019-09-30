@@ -16,8 +16,8 @@ from sklearn.externals import joblib
 
 #%%
 def detectCloud(b):
-    cloud = (b[:, :, 3] > 1600) & (b[:, :, 0] > 2000)
-    noCloud = (~cloud) & ((b[:, :, 0] < 700) & (b[:, :, 1] < 1000) | (b[:, :, 5] < 600) & (b[:, :, 6] < 600))
+    cloud = (b[:, :, 3] > 1900) & (b[:, :, 0] > 1400)
+    noCloud = (~cloud) & (b[:, :, 0] < 700) & (b[:, :, 1] < 1000)
     masker = cloud * 1 + noCloud * 2
     img = np.clip(b[:, :, :3]*1e-4, a_min=0, a_max=1).astype(np.float32)
     mark4 = cv2.watershed(np.uint8(img*255) ,masker)    # 返回-1是边界，0是不确定，剩下的就是目标
@@ -52,13 +52,11 @@ def findBetter(GA, tifList):
         for i in range(7):
             bi = ds.GetRasterBand(i+1).ReadAsArray()
             data[:, :, i] = bi
-            if i >=5:
-                continue
-            validFlag = validFlag & np.where((bi>=-100)&(bi<10000), True, False)
+            validFlag = validFlag & np.where((bi>-101)&(bi<10000), True, False)
 
         NDVI = (data[:, :, 3] - data[:, :, 2]) / (data[:, :, 3] + data[:, :, 2])
-        maxVis = np.max(data[:, :, :3], axis=-1)
-        SWIR = np.where(data[:, :, 6] > -200, data[:, :, 6], 1]
+        maxVis = np.max(data[:, :, :3], -1)
+        SWIR = np.max(data[:, :, 5:], -1)
         NDWI = (maxVis - SWIR) / (maxVis + SWIR)
         blueList.append(np.where(NDVI > NDWI, NDVI, NDWI*10))
         # flag.append(clf.predict(data).reshape((2400, 2400) | ~validFlag))
