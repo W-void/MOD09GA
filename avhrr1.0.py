@@ -11,6 +11,7 @@ from scipy.optimize import curve_fit
 from sklearn.cluster import KMeans
 import time
 from sklearn.decomposition import NMF
+import pywt 
 
 
 
@@ -39,6 +40,9 @@ def detectCloudFromQA(QA):
 def writeImage(bands, path, geotrans=None, proj=None):
     img_width = bands.shape[1]
     img_height = bands.shape[0]
+    if bands.ndim == 2:
+        bands = bands[:, :, None]
+    num_bands = bands.shape[2]
 
     # 设置保存影像的数据类型
     datatype = gdal.GDT_Int16
@@ -47,7 +51,7 @@ def writeImage(bands, path, geotrans=None, proj=None):
     # 先创建驱动，再创建相应的栅格数据集
     driver = gdal.GetDriverByName("GTiff")
     dataset = driver.Create(path, img_width, img_height, 2, datatype)
-    for i in range(2):
+    for i in range(num_bands):
         dataset.GetRasterBand(i+1).WriteArray(bands[:, :, i])
     print("save image success.")
 
@@ -118,27 +122,38 @@ with myTimer():
 # y_pre = km.fit_predict(popt.reshape((-1, 3)))
 # plt.imshow(y_pre.reshape((400, 400)))
 
+#%% 小波拟合
+def func(arr):
+    xdata = np.where(arr != -200)
+    ydata = arr[xdata]
+    cA, cD = pywt.dwt(arr, 'db2')
+    return cA
+
+
+with myTimer():
+    curve = np.apply_along_axis(func, -1, imgFlow)
+
 
 #%%
-# def func(x, a, b, c):
-#     return a + b * np.sin(2*np.pi*x/365) + c * np.cos(2*np.pi*x/365)
+def func(x, a, b, c):
+    return a + b * np.sin(2*np.pi*x/365) + c * np.cos(2*np.pi*x/365)
 
 
-# def curveFit(arr):
-#     xdata = np.where(arr != -200)
-#     ydata = arr[xdata]
-#     if(len(ydata) < 3):
-#         return np.zeros((3))
-#     popt, pcov = curve_fit(func, xdata[0], ydata)
-#     return popt
+def curveFit(arr):
+    xdata = np.where(arr != -200)
+    ydata = arr[xdata]
+    if(len(ydata) < 3):
+        return np.zeros((3))
+    popt, pcov = curve_fit(func, xdata[0], ydata)
+    return popt
 
 
-# with myTimer():
-#     popt = np.apply_along_axis(curveFit, -1, imgFlow)
+with myTimer():
+    popt = np.apply_along_axis(curveFit, -1, imgFlow)
 
-# km = KMeans(n_clusters=10, random_state = 8)
-# y_pre = km.fit_predict(popt.reshape((-1, 3)))
-# plt.imshow(y_pre.reshape((400, 400)))
+km = KMeans(n_clusters=10, random_state = 8)
+y_pre = km.fit_predict(popt.reshape((-1, 3)))
+plt.imshow(y_pre.reshape((400, 400)))
 
 
 #%%
@@ -172,7 +187,7 @@ for i in range(364):
     img = np.dot(popt, basis)
     # writeImage(img, savePath+str(i)+'.tiff')
     tif = TIFF.open(savePath+str(i)+'.tiff', mode = 'w')
-    tif.write_image(img, compression=None)
+    tif.write_image(np.int16(img), compression=None)
     tif.close()
 
 #%%

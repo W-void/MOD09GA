@@ -12,19 +12,50 @@ import gdal
 from gdalconst import *
 import pandas as pd
 from sklearn.externals import joblib
+from sklearn.mixture import GMM, GaussianMixture
 
 
 #%%
 def detectCloud(b):
-    cloud = (b[:, :, 3] > 1900) & (b[:, :, 0] > 1400)
-    noCloud = (~cloud) & ((b[:, :, 0] < 700) & (b[:, :, 1] < 1000))
+    ###
+    cloud = (b[:, :, 3] > 2000) & (b[:, :, 0] > 1500)
+    noCloud = (~cloud) & (((b[:, :, 0] < 400) & (b[:, :, 1] < 800)) | (b[:, :, 5] < 1000))
     masker = cloud * 1 + noCloud * 2
     img = np.clip(b[:, :, :3]*1e-4, a_min=0, a_max=1).astype(np.float32)
     mark4 = cv2.watershed(np.uint8(img*255) ,masker)    # 返回-1是边界，0是不确定，剩下的就是目标
     flag = mark4 != 2
+    ###
     # flag = (b[:, :, 3] > 1200) & (b[:, :, 0] > 1400)
+    # flag = (b & 3 == 1) | (b & 3 == 2)
+    # flag = gmm(b)
     return flag
 
+def gauss(x,mu,sigma,A):
+    return A*exp(-(x-mu)**2/2/sigma**2)
+    
+def gmmHist(b):
+    flag = np.where(np.sum(b[:, :, :5] <= -100, axis=-1) > 0, True, False)
+    light = np.sum(b[:, :, :5], -1) + 300
+    light = np.where(light < 0, 0, light)
+    light = light / np.max(light.flatten())
+    hist, bin = np.histogram(light, 256, (0, 1))
+    hist[0] = 0
+    clf = GMM(4)
+    clf.fit(hist[:, None])
+    labels = clf.fit_predict(hist[:, None])
+    minIdx = np.nonzero(labels == labels[-1])[0][1]
+    cloud = flag | (light >= hist[minIdx])
+
+def gmm(b):
+    flag = np.where(np.sum(b[:, :, :5] <= -100, axis=-1) > 0, True, False)
+    clf = GMM(4)
+    clf.fit(b[:, :, :5].reshape((-1, 5)))
+    h, w, c = b.shape
+    labels = clf.predict(b[:, :, :5].reshape((-1, 5)))
+    idx = np.where(b[:, :, 0] == np.max(b[:, :, 0]))
+    label = clf.predict(b[idx[0][0], idx[1][0], :5])
+    cloud = flag | (labels.reshape((h, w)) == label)
+    return cloud
 
 def findBetter(GA, tifList):
     blue = np.zeros((2400, 2400), np.float32)
@@ -45,24 +76,25 @@ def findBetter(GA, tifList):
         zenithList.append(zenith)
         
         validFlag = np.ones((2400, 2400), np.bool)
-        # data = pd.DataFrame()
-        # bandOrder = [13, 14, 11, 12, 15, 16, 17]
         data = np.zeros((2400, 2400, 7), np.int16)
         ds = gdal.Open(tifList[i])
         for i in range(7):
             bi = ds.GetRasterBand(i+1).ReadAsArray()
-            data[:, :, i] = bi
-            # if i >=5:
-            #     continue
-            # validFlag = validFlag & np.where((bi>=-100)&(bi<10000), True, False)
-        qc = ds.GetRasterBand(3).ReadAsArray()
-        validFlag = (qc & 3) == 2
+            data[:, :, i] = np.clip(bi, 0, 10000)
+            data[:, :, i] = np.where(bi < -100, 10000, data[:, :, i])
+            if i >= 4:
+                continue
+            validFlag = validFlag & np.where((bi>=-100)&(bi<10000), True, False)
+        # qc = ds.GetRasterBand(3).ReadAsArray()
+        # validFlag = (qc & 3) == 2
+        state = ds.GetRasterBand(1).ReadAsArray()
 
         NDVI = (data[:, :, 3] - data[:, :, 2]) / (data[:, :, 3] + data[:, :, 2])
         maxVis = np.max(data[:, :, :3], axis=-1)
-        SWIR = np.where(data[:, :, 6] > -200, data[:, :, 6], data[:, :, 2])
-        NDWI = (maxVis - SWIR) / (maxVis + SWIR)
-        blueList.append(np.where(NDVI > NDWI, NDVI, NDWI*10))
+        SWIR = np.max(data[:, :, 5:], -1)
+        SWIR = np.where(SWIR >= -100, SWIR, data[:, :, 2])
+        NDWI = (maxVis - SWIR) / (np.abs(maxVis) + np.abs(SWIR))
+        blueList.append(np.where((NDVI > NDWI) & (maxVis > 50), NDVI, NDWI))
         # flag.append(clf.predict(data).reshape((2400, 2400) | ~validFlag))
         flag.append(detectCloud(data) | ~validFlag) 
 
@@ -142,16 +174,16 @@ def writeImage(bands, path, geotrans=None, proj=None):
 
 #%%
 GAPath = './MOD09GA_ST/'
-regionList = ['.h27v05', '.h28v06', '.h28v05', '.h27v04']
-tifFileAfterList = [[224, 229], [223, 225], [224, 226], [229, 233]]
-tifFileBeforeList = [[212, 207], [219, 207], [217, 213], [218, 207]]
+regionList = ['.h28v05', '.h27v05', '.h28v06', '.h27v04']
+tifFileAfterList = [[224, 226], [224, 229], [223, 225], [229, 233]]
+tifFileBeforeList = [[217, 213], [212, 207], [219, 207], [218, 207]]
 H = W = 2400
 tifPath = './MOD09GA/'
 GQ = 'D:/Data/MOD09GQ/'
 qc = './QC_500m/'
 allWList = os.listdir(GQ)
 allWList = [i for i in allWList if i[:2] == 'h2']
-for i in range(4):
+for i in range(len(regionList)):
     tifFileBefore = tifFileBeforeList[i]
     tifFileAfter = tifFileAfterList[i]
     region = regionList[i]
@@ -224,23 +256,23 @@ for i in range(4):
                         band = ds.GetRasterBand(j+1).ReadAsArray()
                         # if idx == 1:
                         #     band = cv2.resize(band, None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST)
-                        bandsTmp[:, :, j] = band
+                        bandsTmp[:, :, j] = np.clip(band, -100, 10000)
                     sameDateFlag = (NO == 2*i+ (0 if 'MOD'in fileName else 1))
                     bandsGA += np.int16(bandsTmp * sameDateFlag[:, :, None])
         bandsGA = np.where(flag[:, :, None], -200, bandsGA)
 
         maxVis = np.max(bandsGA[:, :, :3], axis=-1)
         maxSWIR = np.max(bandsGA[:, :, 5:], axis=-1)
-        WI = maxVis > maxSWIR
+        WI = (maxVis > maxSWIR) | (maxVis < 0) & (maxVis >=-100) | (maxVis > bandsGA[:,:,3]) & (bandsGA[:,:,3] >= -100)
         # kernel = np.ones((3, 3), np.float32)
         # WI = cv2.filter2D(WI.astype(np.uint8), -1, kernel)
-        # WI = np.where(WI > 3, 200, 0)
+        # WI = np.where(WI > 2, 200, 0)
 
         # 保存图像，并写入地理信息
         geotrans, proj = readImage('D:\\Data\\MOD09GQ\\'+date[0].split('.')[1]+'_AllWDays_percent.tiff')
         # geotrans /= np.array([1, 2, 1, 1, 1, 2])
-        writeImage(bandsGA, './output/'+date[0].split('.')[1]+'_'+name+'.tiff', \
+        writeImage(bandsGA, './output3/'+date[0].split('.')[1]+'_'+name+'.tiff', \
             geotrans=geotrans, proj=proj)
-        writeImage(WI, './output/'+date[0].split('.')[1]+'_'+name+'_WI.tiff', \
+        writeImage(WI, './output3/'+date[0].split('.')[1]+'_'+name+'_WI.tiff', \
             geotrans=geotrans, proj=proj)
 
