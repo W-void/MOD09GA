@@ -4,3 +4,8 @@
 *.png
 *.css
 *.npy
+*.csv
+*.txt
+*.gif
+*.pkl
+log/

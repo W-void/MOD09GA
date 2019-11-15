@@ -46,8 +46,8 @@ def detectCloud(b):
         b[:, :, 1] < 800)) | (b[:, :, 5] < 1000))
     masker = cloud * 1 + noCloud * 2
     img = np.clip(b[:, :, :3]*1e-4, a_min=0, a_max=1).astype(np.float32)
-    mark4 = cv2.watershed(np.uint8(np.stack((img, img, img), -1)*255), masker)    # 返回-1是边界，0是不确定，剩下的就是目标
-    flag = mark4 != 2
+    mark4 = cv2.watershed(np.uint8(img*255), masker)    # 返回-1是边界，0是不确定，剩下的就是目标
+    flag = mark4 ==1
     ###
     # flag = (b[:, :, 3] > 1200) & (b[:, :, 0] > 1400)
     # flag = (b & 3 == 1) | (b & 3 == 2)
@@ -87,6 +87,7 @@ def detect_1(bands):
     x = ratio.reshape(-1, 1)
     idx = np.random.choice(len(x), size=10000, replace=False)
     clf.fit(x[idx])
+    
 
 #%%
 def detect_2(bands):
@@ -110,12 +111,16 @@ def detect_2(bands):
 
     weights, means, covs = clf.weights_, clf.means_, clf.covariances_
     
-    noCloud = (ratio < np.sort(means.flatten())[0]) | (b < 600)
-    cloud = ratio > np.sort(means.flatten())[1]
+    noCloud = (ratio < np.sort(means.flatten())[0] + 0.01) | (b < 600)
+    cloud = ratio > np.sort(means.flatten() - 0.01)[1]
+    # cloud = (b[:, :, 3] > 0.2) & (b[:, :, 0] > 0.15)
+    # noCloud = (~cloud) & (((b[:, :, 0] < 0.04) & (
+    #     b[:, :, 1] < 0.08)) | (b[:, :, 5] < 0.1))
     masker = cloud * 1 + noCloud * 2
-    img = np.clip(ratio, a_min=0, a_max=2)/2
-    mark4 = cv2.watershed(np.uint8(np.stack((img, img, img), -1)*255), masker)    # 返回-1是边界，0是不确定，剩下的就是目标
-    flag = mark4 != 2
+    img = np.clip(ratio, 0, 2) / 2
+    img = np.stack((img,img,img), -1)
+    mark4 = cv2.watershed(np.uint8(img*255), masker)    # 返回-1是边界，0是不确定，剩下的就是目标
+    flag = (mark4 == 1) | (mark4 == -1)
 
     return cloud, flag
 
@@ -137,7 +142,7 @@ for i in range(7):
 
 
 # %%
-cloud, flag = detect_2(data)
+cloud, flag = detectCloud(data)
 plt.imshow(cloud)
 plt.figure()
 plt.imshow(flag)
@@ -145,6 +150,7 @@ writeImage(cloud, './test/mod_cloud_2.tiff')
 writeImage(flag, './test/mod_test_2.tiff')
 # %%
 plt.imshow(cloud)
+
 # %%
 writeImage(flag, './test/mod_test.tiff')
                            

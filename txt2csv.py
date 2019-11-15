@@ -4,7 +4,7 @@ import numpy as np
 
 
 #%%
-txt = pd.read_csv('./csv/229.txt', sep='\n', header=None)
+txt = pd.read_csv('./csv/1105.txt', sep='\n', header=None)
 txt.head()
 numOfROI = int(txt.iloc[1][0].split()[-1])
 tar = []
@@ -28,7 +28,7 @@ y = np.zeros(sum(tarNum), np.int8)
 y[tarNum[0]:] = 1
 data['class'] = y
 
-data.to_csv('./csv/229.csv', index=False)
+data.to_csv('./csv/1105.csv', index=False)
 
 
 #%%

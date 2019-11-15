@@ -73,20 +73,23 @@ for idx, sds in enumerate(datasets_dic.keys()):
 #%%
 x, y = range(1100, 1600), range(4900, 5400)
 yy, xx = np.meshgrid(y, x)
-imgFlow = np.zeros((500, 500, 364), dtype=np.int16)
+imgFlow = np.zeros((500, 500, 5, 364), dtype=np.int16)
 savePath = 'F:/avh_new/demo/'
 for i, hdf in enumerate(hdfList[:364]):
     print(i)
     sd = SD(avhPath+hdf)
-    R = sd.select(0).get()[xx, yy]
-    # NIR = sd.select(1).get()[xx, yy]
-    # writeImage(np.stack((R, NIR), -1), savePath+'orig_'+str(i)+'.tiff')
-    # T = sd.select(4).get()[xx, yy]
-    # landFlag = detectCloud(R, NIR, T)
-    QA = sd.select(9).get()[xx, yy]
-    landFlag = detectCloudFromQA(QA)
-    imgFlow[:, :, i] = np.clip(np.where(landFlag, R, -200), a_min=-200, a_max=4000)
-
+    for j in range(5):
+        band = sd.select(j).get()[xx, yy]
+        imgFlow[:, :, j, i] = band
+    # R = sd.select(0).get()[xx, yy]
+    # # NIR = sd.select(1).get()[xx, yy]
+    # # writeImage(np.stack((R, NIR), -1), savePath+'orig_'+str(i)+'.tiff')
+    # # T = sd.select(4).get()[xx, yy]
+    # # landFlag = detectCloud(R, NIR, T)
+    # QA = sd.select(9).get()[xx, yy]
+    # landFlag = detectCloudFromQA(QA)
+    # imgFlow[:, :, i] = np.clip(np.where(landFlag, R, -200), a_min=-200, a_max=4000)
+np.save('./test/test_img.npy', imgFlow)
   
 #%%
 def myfunc(arr):

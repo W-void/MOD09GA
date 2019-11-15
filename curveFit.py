@@ -30,7 +30,7 @@ avhPath = 'F:/avh_new/demo/'
 tiffList = os.listdir(avhPath)
 
 
-flow = np.zeros((500, 500, 3, 364), dtype=np.float)
+flow = np.zeros((500, 500, 5, 364), dtype=np.float)
 for i, tiff in enumerate(tiffList[:364]):
     print(i)
     ds = gdal.Open(avhPath+tiff)
