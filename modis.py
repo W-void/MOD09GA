@@ -16,9 +16,12 @@ from glob import glob
 
 
 # %%
-# avhPath = 'F:/mod09a1/h11v04/2008/'
-# hdfList = os.listdir(avhPath)
-hdfList = glob('F:/mod09a1/h27v06_2005_2010/2008/*hdf')
+# hdfPath = 'F:/mod09a1/h27v05_2009_2015/2009/'
+# hdfPath = 'F:/mod09a1/h11v04/2008/'
+hdfPath = 'F:/mod09a1/h27v06_2005_2010/2008/'
+# hdfList = os.listdir(hdfPath)
+# hdfList = glob(os.path.join(hdfPath, '**/*.hdf'), recursive=True)
+hdfList = glob(os.path.join(hdfPath, '*.hdf'))
 sd = SD(hdfList[0])
 datasets_dic = sd.datasets()
 for idx, sds in enumerate(datasets_dic.keys()):
@@ -29,8 +32,9 @@ w, h = sd.select(0).get().shape
 print("len:{0}, w:{1}, h:{2}".format(l, w, h))
 
 # %%
-x = 1000
-y = 1000
+# x, y= 1700, 1500
+# x, y = 1900, 1000
+x, y = 700, 500
 flow = np.zeros((l, 7 + 1), dtype=np.int16)
 # savePath = 'F:/mod09a1/h11v04/2008/'
 for i, hdf in enumerate(hdfList):
@@ -43,9 +47,9 @@ for i, hdf in enumerate(hdfList):
     flow[i, 7] = (state & 3 == 2) * 2 + (state & 3 == 1) * 1 # 1是纯云，2是混合
 
 states = flow[:, 7]
-flow = flow[:, :7]
-# %%
-flow = flow.T * 1e-4
+flow = flow[:, :7].T * 1e-4
+
+#%%
 plt.plot(flow[0], marker='o')
 a, b = flow[:, :-1], flow[:, 1:]
 rho = np.sum(a * b, 0)/ np.sqrt(np.sum(a * a, 0) * np.sum(b * b, 0))
@@ -55,7 +59,7 @@ plt.figure()
 for i, band in enumerate(flow):
     plt.plot(np.where(band > 0, band, 0), label='b'+str(i))
 plt.plot(np.where(rho > 0, rho, 0), label='rho') 
-plt.legend()
+plt.legend(loc=0)
 plt.xlabel('date')
 plt.ylabel('reflect')
 my_y_ticks = np.arange(0, 1.1, 0.2)
@@ -65,26 +69,47 @@ plt.yticks(my_y_ticks)
 plt.show()
 
 # %%
-states = np.zeros((l, 1), dtype=np.int16)
-for i, hdf in enumerate(hdfList):
-    print(i)
-    sd = SD(hdf)
-    state = sd.select(11).get()[x, y] # 11 波段是状态波段
-    states[i] = (state & 3 == 2) * 1 + (state & 3 == 1) * 2 # 1是纯云，2是混合
+# states = np.zeros((l, 1), dtype=np.int16)
+# for i, hdf in enumerate(hdfList):
+#     print(i)
+#     sd = SD(hdf)
+#     state = sd.select(11).get()[x, y] # 11 波段是状态波段
+#     states[i] = (state & 3 == 2) * 1 + (state & 3 == 1) * 2 # 1是纯云，2是混合
 
 # %%
 
-idx2 = np.where(states == 2)
-idx1 = np.where((states != 2).flatten() & (flow[0] > 0.14))
-idx3 = np.where(states == 0)
+idx1 = np.where(states != 0)
+idx2 = np.where((states == 0) & (flow[0] > 0.1))
+idx3 = np.where(states == 0 & (flow[0] < 0.1))
+# idx1 = np.where(flow[0] > 0.17)
+# idx2 = np.where((flow[0] < 0.17) & (flow[0] > 0.08))
+# idx3 = np.where(flow[0] < 0.08)
 
 for i in range(1):
     plt.figure()
-    plt.scatter(idx3[0], flow[i, idx3[0]], label='clear')
-    plt.scatter(idx1[0], flow[i, idx1[0]], c='g', label='thin')
-    plt.scatter(idx2[0], flow[i, idx2[0]], c='r', label='thick')
-    plt.plot(flow[i])
-    plt.legend()
+    plt.scatter(idx3[0]*8, flow[i, idx3[0]], label='clear')
+    plt.scatter(idx1[0]*8, flow[i, idx1[0]], c='r', label='thick')
+    plt.scatter(idx2[0]*8, flow[i, idx2[0]], marker='*', s=100, c='r', label='thin')
+    plt.plot(np.arange(len(flow[i]))*8, flow[i])
+    plt.legend(loc=0)
+    plt.xlabel('date')
+    plt.ylabel('reflect')
+    plt.show()
+
+# %%
+
+idx1 = np.where(states != 0)
+idx2 = np.where(states == 0)
+# idx1 = np.where(flow[0] > 0.17)
+# idx2 = np.where((flow[0] < 0.17) & (flow[0] > 0.03))
+# idx3 = np.where(flow[0] < 0.03)
+
+for i in range(7):
+    plt.figure()
+    plt.scatter(idx2[0]*8, flow[i, idx2[0]], label='clear')
+    plt.scatter(idx1[0]*8, flow[i, idx1[0]], c='r', label='cloud')
+    plt.plot(np.arange(len(flow[i]))*8, flow[i])
+    plt.legend(loc=0)
     plt.xlabel('date')
     plt.ylabel('reflect')
     plt.show()
